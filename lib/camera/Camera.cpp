@@ -1,6 +1,6 @@
 #include "esp32-hal.h"
 #include "camera.h"
-#define CAMERA_MODEL_AI_THINKER // Has PSRAM
+#define CAMERA_MODEL_XIAO_ESP32S3 // Has PSRAM
 #include "esp_camera.h"
 #include "camera_pins.h"
 #include <Arduino.h>
