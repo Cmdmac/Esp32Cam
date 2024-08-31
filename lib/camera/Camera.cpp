@@ -9,7 +9,7 @@
 void startCameraServer();
 
 
-Camera::Camera() {
+Camera::Camera() : pSensor(NULL) {
 
 }
 
@@ -35,7 +35,7 @@ void Camera::setUp() {
     config.pin_pwdn = PWDN_GPIO_NUM;
     config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
-    config.frame_size = FRAMESIZE_UXGA;
+    config.frame_size = FRAMESIZE_SVGA;//FRAMESIZE_UXGA;
     config.pixel_format = PIXFORMAT_JPEG; // for streaming
     config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     config.fb_location = CAMERA_FB_IN_PSRAM;
@@ -47,10 +47,14 @@ void Camera::setUp() {
         config.jpeg_quality = 10;
         config.fb_count = 2;
         config.grab_mode = CAMERA_GRAB_LATEST;
+        this->frameSize = FRAMESIZE_SVGA;
+        this->quality = 10;
     } else {
         // Limit the frame size when PSRAM is not available
         config.frame_size = FRAMESIZE_SVGA;
         config.fb_location = CAMERA_FB_IN_DRAM;
+        this->frameSize = FRAMESIZE_SVGA;
+        this->quality = 10;
     }
 
     // camera init
@@ -61,6 +65,7 @@ void Camera::setUp() {
     }
 
     sensor_t *s = esp_camera_sensor_get();
+    pSensor = s;
     // initial sensors are flipped vertically and colors are a bit saturated
     if (s->id.PID == OV3660_PID) {
         s->set_vflip(s, 1);        // flip it back
@@ -68,9 +73,9 @@ void Camera::setUp() {
         s->set_saturation(s, -2);  // lower the saturation
     }
     // drop down frame size for higher initial frame rate
-    if (config.pixel_format == PIXFORMAT_JPEG) {
-        s->set_framesize(s, FRAMESIZE_QVGA);
-    }
+    // if (config.pixel_format == PIXFORMAT_JPEG) {
+    //     s->set_framesize(s, FRAMESIZE_QVGA);
+    // }
 
     #if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
     s->set_vflip(s, 1);
@@ -84,4 +89,40 @@ void Camera::setUp() {
 
 void Camera::startStreamServer() {
     ::startCameraServer();
+}
+
+void Camera::increaseJPGQuality() {
+    int quality = this->pSensor->status.quality;
+    quality = (quality + 4) % 64 + 4;
+    this->pSensor->set_quality(this->pSensor, quality);
+}
+
+void Camera::decreaseJPGQuality() {
+    int quality = this->pSensor->status.quality;
+    quality = (quality - 4) % 64 + 4;
+    this->pSensor->set_quality(this->pSensor, quality);
+}
+
+void Camera::setJPGQuality(int quality) {
+    if (quality > 0 && quality < 64) {
+        this->pSensor->set_quality(this->pSensor, quality);
+    }
+}
+
+void Camera::increaseFrameSize() {
+    framesize_t frameSize = this->pSensor->status.framesize;
+    frameSize = (framesize_t)((frameSize + 1) % FRAMESIZE_INVALID + 1);
+    this->pSensor->set_framesize(this->pSensor, frameSize);
+}
+
+void Camera::decreaseFrameSize() {
+    framesize_t frameSize = this->pSensor->status.framesize;
+    frameSize = (framesize_t)((frameSize - 1) % FRAMESIZE_INVALID + 1);
+    this->pSensor->set_framesize(this->pSensor, frameSize);
+}
+
+void Camera::setFrameSize(int frameSize) {
+    if (this->pSensor->pixformat == PIXFORMAT_JPEG) {
+        this->pSensor->set_framesize(this->pSensor, (framesize_t)frameSize);
+    }
 }
