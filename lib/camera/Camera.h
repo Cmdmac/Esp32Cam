@@ -1,5 +1,5 @@
 #ifndef _CAMERA_H
-
+#include <sensor.h>
 class Camera {
     public:
         Camera();

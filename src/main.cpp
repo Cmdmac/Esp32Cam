@@ -2,30 +2,41 @@
 #include "Camera.h"
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
+#include <ArduinoJson.h>
 using namespace websockets;
 
 WebsocketsClient client;
 WebsocketsClient streamClient;
 const char* ssid     = "Stark";  // 替换为您的 Wi-Fi 网络名称
 const char* password = "fengzhiping,1101";  // 替换为您的 Wi-Fi 密码
-const char* ws_control_url = "ws://192.168.1.4:3000/mobile/camera/control"; //Enter server adress
-const char* ws_stream_url = "ws://192.168.1.4:3000/mobile/camera/stream"; //Enter server adress
+const char* ws_control_url = "ws://192.168.2.153:3000/mobile"; //Enter server adress
+const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream"; //Enter server adress
 
 
+Camera camera;
 void onControlMessageCallback(WebsocketsMessage message) {
     Serial.print("Got Message: ");
     Serial.println(message.data());
+    JsonDocument doc;
+    deserializeJson(doc, message.data());
+    if (doc["command"] == 10) {
+      camera.increaseFrameSize();
+      Serial.println("increaseFrameSize");
+    } else if (doc["command"] == 20) {
+      camera.decreaseFrameSize();
+      Serial.println("decreaseFrameSize");
+    }
 }
 
 void onControlEventsCallback(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Connnection Opened");
+        Serial.println("Control Connnection Opened");
     } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Connnection Closed");
+        Serial.println("Control Connnection Closed");
     } else if(event == WebsocketsEvent::GotPing) {
-        Serial.println("Got a Ping!");
+        Serial.println("Control Got a Ping!");
     } else if(event == WebsocketsEvent::GotPong) {
-        Serial.println("Got a Pong!");
+        Serial.println("Control Got a Pong!");
     }
 }
 
@@ -36,17 +47,16 @@ void onStreamMessageCallback(WebsocketsMessage message) {
 
 void onStreamEventsCallback(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Connnection Opened");
+        Serial.println("Stream Connnection Opened");
     } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Connnection Closed");
+        Serial.println("Stream Connnection Closed");
     } else if(event == WebsocketsEvent::GotPing) {
-        Serial.println("Got a Ping!");
+        Serial.println("Stream Got a Ping!");
     } else if(event == WebsocketsEvent::GotPong) {
-        Serial.println("Got a Pong!");
+        Serial.println("Stream Got a Pong!");
     }
 }
 
-Camera camera;
 void setup() {
   Serial.begin(9600);
   
@@ -77,4 +87,5 @@ void setup() {
 
 void loop() {
   client.poll();
+  streamClient.poll();
 }
