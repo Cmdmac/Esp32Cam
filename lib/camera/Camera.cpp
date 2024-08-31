@@ -107,13 +107,16 @@ void Camera::setJPGQuality(int quality) {
 
 void Camera::increaseFrameSize() {
     framesize_t frameSize = this->pSensor->status.framesize;
-    frameSize = (framesize_t)((frameSize + 1) % FRAMESIZE_INVALID + 1);
+    frameSize = (framesize_t)(frameSize % FRAMESIZE_INVALID + 1);
     this->pSensor->set_framesize(this->pSensor, frameSize);
 }
 
 void Camera::decreaseFrameSize() {
     framesize_t frameSize = this->pSensor->status.framesize;
-    frameSize = (framesize_t)((frameSize - 1) % FRAMESIZE_INVALID + 1);
+    frameSize = (framesize_t)(frameSize % FRAMESIZE_INVALID - 1);
+    if (frameSize <= 0) {
+        frameSize = (framesize_t)1;
+    }
     this->pSensor->set_framesize(this->pSensor, frameSize);
 }
 
