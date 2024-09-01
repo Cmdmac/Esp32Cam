@@ -9,8 +9,8 @@ WebsocketsClient client;
 WebsocketsClient streamClient;
 const char* ssid     = "Stark";  // 替换为您的 Wi-Fi 网络名称
 const char* password = "fengzhiping,1101";  // 替换为您的 Wi-Fi 密码
-const char* ws_control_url = "ws://192.168.2.153:3000/mobile"; //Enter server adress
-const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream"; //Enter server adress
+const char* ws_control_url = "ws://192.168.2.153:3000/mobile/camera/control?client=esp32cam"; //Enter server adress
+const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream?client=esp32cam"; //Enter server adress
 
 
 Camera camera;
@@ -20,11 +20,11 @@ void onControlMessageCallback(WebsocketsMessage message) {
     JsonDocument doc;
     deserializeJson(doc, message.data());
     if (doc["command"] == 10) {
-      camera.increaseFrameSize();
-      Serial.println("increaseFrameSize");
+        Serial.println("increaseFrameSize");
+        camera.increaseFrameSize();
     } else if (doc["command"] == 20) {
-      camera.decreaseFrameSize();
-      Serial.println("decreaseFrameSize");
+        Serial.println("decreaseFrameSize");
+        camera.decreaseFrameSize();
     }
 }
 
@@ -48,6 +48,8 @@ void onStreamMessageCallback(WebsocketsMessage message) {
 void onStreamEventsCallback(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
         Serial.println("Stream Connnection Opened");
+        WSInterfaceString s = "123456dads";
+        streamClient.sendBinary(s);
     } else if(event == WebsocketsEvent::ConnectionClosed) {
         Serial.println("Stream Connnection Closed");
     } else if(event == WebsocketsEvent::GotPing) {
@@ -67,7 +69,7 @@ void setup() {
   Serial.println("Connecting to WiFi...");
   while (WiFi.status()!= WL_CONNECTED) {
     delay(1000);
-    Serial.println(".");
+    Serial.print(".");
   }
 
   camera.startStreamServer();
