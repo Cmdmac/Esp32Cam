@@ -1,9 +1,13 @@
 #ifndef _COMMAND_H_
 
 typedef enum {
+    START_STREAM,
+    STOP_STREAM,
     NET_SPEED,
-    JPG_QUALITY,
-    FRAME_SIZE
+    INCREASE_JPG_QUALITY,
+    DECREASE_JPG_QUALITY,
+    INCREASE_FRAME_SIZE,
+    DECREASE_FRAME_SIZE
 } CommandType;
 
 #endif _COMMAND_H_

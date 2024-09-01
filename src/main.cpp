@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
 #include <ArduinoJson.h>
+#include "command.h"
 using namespace websockets;
 
 WebsocketsClient client;
@@ -19,12 +20,25 @@ void onControlMessageCallback(WebsocketsMessage message) {
     Serial.println(message.data());
     JsonDocument doc;
     deserializeJson(doc, message.data());
-    if (doc["command"] == 10) {
-        Serial.println("increaseFrameSize");
-        camera.increaseFrameSize();
-    } else if (doc["command"] == 20) {
-        Serial.println("decreaseFrameSize");
-        camera.decreaseFrameSize();
+    int cmd = doc["command"];
+    switch(cmd) {
+        case START_STREAM:
+            camera.starStreamHandler(streamClient);
+            break;
+        case STOP_STREAM:
+        break;
+        case INCREASE_JPG_QUALITY:
+            camera.increaseFrameSize();
+        break;
+        case DECREASE_JPG_QUALITY:
+            camera.decreaseFrameSize();
+        break;
+        case INCREASE_FRAME_SIZE:
+        break;
+        case DECREASE_FRAME_SIZE:
+        break;
+        default:
+        break;
     }
 }
 

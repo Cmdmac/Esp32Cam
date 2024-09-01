@@ -1,5 +1,7 @@
 #ifndef _CAMERA_H
 #include <sensor.h>
+#include <ArduinoWebsockets.h>
+using namespace websockets;
 class Camera {
     public:
         Camera();
@@ -11,8 +13,12 @@ class Camera {
         void increaseFrameSize();
         void decreaseFrameSize();
         void setFrameSize(int);
+        void starStreamHandler(WebsocketsClient ws);
+        void stopStreamHandler();
 
     private:
+        char* allocateMemory(char* aPtr, size_t aSize);
+        
         sensor_t *pSensor;
 
 };

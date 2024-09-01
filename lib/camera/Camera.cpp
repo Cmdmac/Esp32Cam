@@ -125,3 +125,77 @@ void Camera::setFrameSize(int frameSize) {
         this->pSensor->set_framesize(this->pSensor, (framesize_t)frameSize);
     }
 }
+
+// ==== Memory allocator that takes advantage of PSRAM if present =======================
+char* Camera::allocateMemory(char* aPtr, size_t aSize) {
+
+  //  Since current buffer is too smal, free it
+  if (aPtr != NULL) free(aPtr);
+
+
+  size_t freeHeap = ESP.getFreeHeap();
+  char* ptr = NULL;
+
+  // If memory requested is more than 2/3 of the currently free heap, try PSRAM immediately
+  if ( aSize > freeHeap * 2 / 3 ) {
+    if ( psramFound() && ESP.getFreePsram() > aSize ) {
+      ptr = (char*) ps_malloc(aSize);
+    }
+  }
+  else {
+    //  Enough free heap - let's try allocating fast RAM as a buffer
+    ptr = (char*) malloc(aSize);
+
+    //  If allocation on the heap failed, let's give PSRAM one more chance:
+    if ( ptr == NULL && psramFound() && ESP.getFreePsram() > aSize) {
+      ptr = (char*) ps_malloc(aSize);
+    }
+  }
+}
+
+// ==== RTOS task to grab frames from the camera =========================
+void Camera::starStreamHandler(WebsocketsClient ws) {
+
+  //  Pointers to the 2 frames, their respective sizes and index of the current frame
+  char* fbs[2] = { NULL, NULL };
+  size_t fSize[2] = { 0, 0 };
+  int ifb = 0;
+  camera_fb_t* fb = NULL;
+  for (;;) {
+
+    //  Grab a frame from the camera and query its size
+    if (fb)
+        esp_camera_fb_return(fb);
+
+    fb = esp_camera_fb_get();
+    if (fb == NULL) {
+        break;
+    }
+    size_t s = fb->len;
+
+    //  If frame size is more that we have previously allocated - request  125% of the current frame space
+    if (s > fSize[ifb]) {
+      fSize[ifb] = s * 4 / 3;
+      fbs[ifb] = allocateMemory(fbs[ifb], fSize[ifb]);
+    }
+
+    //  Copy current frame into local buffer
+    char* b = (char*) fb->buf;
+    memcpy(fbs[ifb], b, s);
+
+    //  Do not allow interrupts while switching the current frame
+    // portENTER_CRITICAL(&xSemaphore);
+    char* bufForWs = fbs[ifb];
+    int bufFowWsLen = s;
+    // send buffer
+    ws.sendBinary(bufForWs, bufFowWsLen);
+    ifb++;
+    ifb &= 1;  // this should produce 1, 0, 1, 0, 1 ... sequence
+    // portEXIT_CRITICAL(&xSemaphore);
+
+  }
+}
+
+void Camera::stopStreamHandler() {
+    
+}
