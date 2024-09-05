@@ -4,8 +4,8 @@
 #include "esp_camera.h"
 #include "camera_pins.h"
 #include <Arduino.h>
-
-
+#include <freertos/portmacro.h>
+#include <WebServer.h>
 void startCameraServer();
 
 
@@ -151,6 +151,120 @@ char* Camera::allocateMemory(char* aPtr, size_t aSize) {
       ptr = (char*) ps_malloc(aSize);
     }
   }
+  return aPtr;
+}
+
+
+//cache
+int memcache_size = 4096;
+int data_size = 0;
+char* fbCache = NULL;
+portMUX_TYPE xSemaphore;
+bool is_sending = false;
+void Camera::starStreamHandler2(WebsocketsClient client) {
+    camera_fb_t *fb = NULL;
+    struct timeval _timestamp;
+    esp_err_t res = ESP_OK;
+    size_t _jpg_buf_len = 0;
+    uint8_t *_jpg_buf = NULL;
+    char *part_buf[128];
+    static int64_t last_frame = 0;
+
+
+    if (!last_frame)
+    {
+        last_frame = esp_timer_get_time();
+    }
+
+    while (true)
+    {
+        last_frame = esp_timer_get_time();
+        fb = esp_camera_fb_get();
+        if (!fb)
+        {
+            res = ESP_FAIL;
+        }
+        else
+        {
+            _timestamp.tv_sec = fb->timestamp.tv_sec;
+            _timestamp.tv_usec = fb->timestamp.tv_usec;
+            if (fb->format != PIXFORMAT_JPEG)
+                {
+                    bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+                    esp_camera_fb_return(fb);
+                    fb = NULL;
+                    if (!jpeg_converted)
+                    {
+                        res = ESP_FAIL;
+                    }
+                }
+                else
+                {
+                    _jpg_buf_len = fb->len;
+                    _jpg_buf = fb->buf;
+                }
+                }
+        if (res == ESP_OK)
+        {
+            portENTER_CRITICAL(&xSemaphore);
+            if (!is_sending) {
+                size_t s = fb->len;
+                // res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+                if (s > memcache_size) {
+                    memcache_size = s * 4 / 3;
+                    Serial.println("allocateMemory");
+                    fbCache = allocateMemory(fbCache, memcache_size);
+                }
+
+                //  Copy current frame into local buffer
+                char* b = (char*) fb->buf;
+                memcpy(fbCache, b, s);
+                data_size = s;
+                
+            }
+            portEXIT_CRITICAL(&xSemaphore);
+            // client.sendBinary((const char*)fb->buf, fb->len);
+
+        }
+
+        if (fb)
+        {
+            esp_camera_fb_return(fb);
+            fb = NULL;
+            _jpg_buf = NULL;
+        }
+        else if (_jpg_buf)
+        {
+            free(_jpg_buf);
+            _jpg_buf = NULL;
+        }
+        if (res != ESP_OK)
+        {
+            break;
+        }
+        int64_t fr_end = esp_timer_get_time();
+         int64_t frame_time = fr_end - last_frame;
+        frame_time /= 1000;
+        Serial.print("MJPG:");Serial.print((uint32_t)(_jpg_buf_len));Serial.print("-");
+        Serial.print((uint32_t)frame_time);Serial.print("ms");Serial.print("-");
+        Serial.print(1000.0 / (uint32_t)frame_time);Serial.print("fps");
+        Serial.println();
+        // Serial.print("avg");Serial.print(avg_frame_time);
+        // Serial.print("avgfps");Serial.print(1000.0 / avg_frame_time);
+    }
+}
+
+void Camera::sendCache(WebsocketsClient client) {
+    while(true) {
+        portENTER_CRITICAL(&xSemaphore);
+        is_sending = true;
+        if (fbCache != NULL) {
+            client.sendBinary((const char*)fbCache, data_size);
+        }
+        is_sending = false;
+        portEXIT_CRITICAL(&xSemaphore);
+    }
+
 }
 
 // ==== RTOS task to grab frames from the camera =========================
@@ -188,7 +302,7 @@ void Camera::starStreamHandler(WebsocketsClient ws) {
     char* bufForWs = fbs[ifb];
     int bufFowWsLen = s;
     // send buffer
-    ws.sendBinary(bufForWs, bufFowWsLen);
+    // ws.sendBinary(bufForWs, bufFowWsLen);
     ifb++;
     ifb &= 1;  // this should produce 1, 0, 1, 0, 1 ... sequence
     // portEXIT_CRITICAL(&xSemaphore);
@@ -198,4 +312,292 @@ void Camera::starStreamHandler(WebsocketsClient ws) {
 
 void Camera::stopStreamHandler() {
     
+}
+#define APP_CPU 1
+#define PRO_CPU 0
+// ===== rtos task handles =========================
+// Streaming is implemented with 3 tasks:
+TaskHandle_t handle_Mjpeg;   // handles client connections to the webserver
+TaskHandle_t handle_Cam;     // handles getting picture frames from the camera and storing them locally
+TaskHandle_t handle_Stream;  // actually streaming frames to all connected clients
+// frameSync semaphore is used to prevent streaming buffer as it is replaced with the next frame
+SemaphoreHandle_t frameSync = NULL;
+// Queue stores currently connected clients to whom we are streaming
+QueueHandle_t streamingClients;
+// We will try to achieve 25 FPS frame rate
+const int FPS = 1000;
+// We will handle web client requests every 50 ms (20 Hz)
+const int WSINTERVAL = 100;
+// Commonly used variables:
+volatile size_t camSize;    // size of the current frame, byte
+volatile char* camBuf;      // pointer to the current frame
+
+// ==== RTOS task to grab frames from the camera =========================
+void camCB(void* pvParameters) {
+
+  TickType_t xLastWakeTime;
+
+  //  A running interval associated with currently desired frame rate
+  const TickType_t xFrequency = pdMS_TO_TICKS(1000 / FPS);
+
+  // Mutex for the critical section of swithing the active frames around
+  portMUX_TYPE xSemaphore = portMUX_INITIALIZER_UNLOCKED;
+
+  //  Pointers to the 2 frames, their respective sizes and index of the current frame
+  char* fbs[2] = { NULL, NULL };
+  size_t fSize[2] = { 0, 0 };
+  int ifb = 0;
+
+  //=== loop() section  ===================
+  xLastWakeTime = xTaskGetTickCount();
+
+    camera_fb_t *fb = NULL;
+
+  for (;;) {
+
+    //  Grab a frame from the camera and query its size
+    // cam.run();
+    if (fb)
+        //return the frame buffer back to the driver for reuse
+        esp_camera_fb_return(fb);
+
+    fb = esp_camera_fb_get();
+
+    size_t s = fb->len;
+
+    //  If frame size is more that we have previously allocated - request  125% of the current frame space
+    if (s > fSize[ifb]) {
+      fSize[ifb] = s * 4 / 3;
+      Serial.println("allocateMemory");
+      fbs[ifb] = (char*) malloc(fSize[ifb]);;//Camera::allocateMemory(fbs[ifb], fSize[ifb]);
+    }
+
+    //  Copy current frame into local buffer
+    char* b = (char*) fb->buf;
+    memcpy(fbs[ifb], b, s);
+
+    //  Let other tasks run and wait until the end of the current frame rate interval (if any time left)
+    taskYIELD();
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+    //  Only switch frames around if no frame is currently being streamed to a client
+    //  Wait on a semaphore until client operation completes
+    xSemaphoreTake( frameSync, portMAX_DELAY );
+
+    //  Do not allow interrupts while switching the current frame
+    portENTER_CRITICAL(&xSemaphore);
+    camBuf = fbs[ifb];
+    camSize = s;
+    ifb++;
+    ifb &= 1;  // this should produce 1, 0, 1, 0, 1 ... sequence
+    portEXIT_CRITICAL(&xSemaphore);
+
+    //  Let anyone waiting for a frame know that the frame is ready
+    xSemaphoreGive( frameSync );
+
+    //  Technically only needed once: let the streaming task know that we have at least one frame
+    //  and it could start sending frames to the clients, if any
+    xTaskNotifyGive( handle_Stream );
+
+    //  Immediately let other (streaming) tasks run
+    taskYIELD();
+
+    //  If streaming task has suspended itself (no active clients to stream to)
+    //  there is no need to grab frames from the camera. We can save some juice
+    //  by suspedning the tasks
+    if ( eTaskGetState( handle_Stream ) == eSuspended ) {
+      vTaskSuspend(NULL);  // passing NULL means "suspend yourself"
+    }
+  }
+}
+
+
+// ==== STREAMING ======================================================
+const char HEADER[] = "HTTP/1.1 200 OK\r\n" \
+                      "Access-Control-Allow-Origin: *\r\n" \
+                      "Content-Type: multipart/x-mixed-replace; boundary=123456789000000000000987654321\r\n";
+const char BOUNDARY[] = "\r\n--123456789000000000000987654321\r\n";
+const char CTNTTYPE[] = "Content-Type: image/jpeg\r\nContent-Length: ";
+const int hdrLen = strlen(HEADER);
+const int bdrLen = strlen(BOUNDARY);
+const int cntLen = strlen(CTNTTYPE);
+
+WebServer server(80);
+
+// ==== Handle connection request from clients ===============================
+void handleJPGSstream(void)
+{
+  //  Can only acommodate 10 clients. The limit is a default for WiFi connections
+  if ( !uxQueueSpacesAvailable(streamingClients) ) return;
+
+
+  //  Create a new WiFi Client object to keep track of this one
+  WiFiClient* client = new WiFiClient();
+  *client = server.client();
+
+  //  Immediately send this client a header
+  client->write(HEADER, hdrLen);
+  client->write(BOUNDARY, bdrLen);
+
+  // Push the client to the streaming queue
+  xQueueSend(streamingClients, (void *) &client, 0);
+
+  // Wake up streaming tasks, if they were previously suspended:
+  if ( eTaskGetState( handle_Cam ) == eSuspended ) vTaskResume( handle_Cam );
+  if ( eTaskGetState( handle_Stream ) == eSuspended ) vTaskResume( handle_Stream );
+}
+
+
+// ==== Actually stream content to all connected clients ========================
+void streamCB(void * pvParameters) {
+  char buf[16];
+  TickType_t xLastWakeTime;
+  TickType_t xFrequency;
+
+  //  Wait until the first frame is captured and there is something to send
+  //  to clients
+  ulTaskNotifyTake( pdTRUE,          /* Clear the notification value before exiting. */
+                    portMAX_DELAY ); /* Block indefinitely. */
+
+  xLastWakeTime = xTaskGetTickCount();
+  for (;;) {
+    // Default assumption we are running according to the FPS
+    xFrequency = pdMS_TO_TICKS(1000 / FPS);
+
+    //  Only bother to send anything if there is someone watching
+    UBaseType_t activeClients = uxQueueMessagesWaiting(streamingClients);
+    if ( activeClients ) {
+      // Adjust the period to the number of connected clients
+      xFrequency /= activeClients;
+
+      //  Since we are sending the same frame to everyone,
+      //  pop a client from the the front of the queue
+      WiFiClient *client;
+      xQueueReceive (streamingClients, (void*) &client, 0);
+
+      //  Check if this client is still connected.
+
+      if (!client->connected()) {
+        //  delete this client reference if s/he has disconnected
+        //  and don't put it back on the queue anymore. Bye!
+        delete client;
+      }
+      else {
+
+        //  Ok. This is an actively connected client.
+        //  Let's grab a semaphore to prevent frame changes while we
+        //  are serving this frame
+        xSemaphoreTake( frameSync, portMAX_DELAY );
+
+        client->write(CTNTTYPE, cntLen);
+        sprintf(buf, "%d\r\n\r\n", camSize);
+        client->write(buf, strlen(buf));
+        client->write((char*) camBuf, (size_t)camSize);
+        client->write(BOUNDARY, bdrLen);
+
+        // Since this client is still connected, push it to the end
+        // of the queue for further processing
+        xQueueSend(streamingClients, (void *) &client, 0);
+
+        //  The frame has been served. Release the semaphore and let other tasks run.
+        //  If there is a frame switch ready, it will happen now in between frames
+        xSemaphoreGive( frameSync );
+        taskYIELD();
+      }
+    }
+    else {
+      //  Since there are no connected clients, there is no reason to waste battery running
+      vTaskSuspend(NULL);
+    }
+    //  Let other tasks run after serving every client
+    taskYIELD();
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+}
+
+
+void handleNotFound()
+{
+  String message = "Server is running!\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  server.send(200, "text / plain", message);
+}
+
+// ======== Server Connection Handler Task ==========================
+void mjpegCB(void* pvParameters) {
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = pdMS_TO_TICKS(WSINTERVAL);
+
+  // Creating frame synchronization semaphore and initializing it
+  frameSync = xSemaphoreCreateBinary();
+  xSemaphoreGive( frameSync );
+
+  // Creating a queue to track all connected clients
+  streamingClients = xQueueCreate( 10, sizeof(WiFiClient*) );
+
+  //=== setup section  ==================
+
+  //  Creating RTOS task for grabbing frames from the camera
+  xTaskCreatePinnedToCore(
+    camCB,        // callback
+    "cam",        // name
+    4096,         // stacj size
+    NULL,         // parameters
+    2,            // priority
+    &handle_Cam,        // RTOS task handle
+    APP_CPU);     // core
+
+  //  Creating task to push the stream to all connected clients
+  xTaskCreatePinnedToCore(
+    streamCB,
+    "strmCB",
+    4 * 1024,
+    NULL, //(void*) handler,
+    2,
+    &handle_Stream,
+    APP_CPU);
+
+    Serial.println("start web server");
+    //  Registering webserver handling routines
+    server.on("/mjpeg/1", HTTP_GET, handleJPGSstream);
+    //   server.on("/jpg", HTTP_GET, handleJPG);
+    server.onNotFound(handleNotFound);
+
+    //  Starting webserver
+    server.begin();
+
+  //=== loop() section  ===================
+  xLastWakeTime = xTaskGetTickCount();
+  for (;;) {
+    server.handleClient();
+
+    //  After every server client handling request, we let other tasks run and then pause
+    taskYIELD();
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+}
+
+void Camera::startStreamServer2() {
+    // WebServer server(80);
+    //  Registering webserver handling routines
+//   server.on("/mjpeg/1", HTTP_GET, handleJPGSstream);
+//   server.on("/jpg", HTTP_GET, handleJPG);
+//   server.onNotFound(handleNotFound);
+
+//    Starting webserver
+//   server.begin();
+    xTaskCreatePinnedToCore(
+        mjpegCB,
+        "mjpeg",
+        4 * 1024,
+        NULL,
+        2,
+        &handle_Mjpeg,
+        APP_CPU);
 }

@@ -62,8 +62,8 @@ void onStreamMessageCallback(WebsocketsMessage message) {
 void onStreamEventsCallback(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
         Serial.println("Stream Connnection Opened");
-        WSInterfaceString s = "123456dads";
-        streamClient.sendBinary(s);
+        // WSInterfaceString s = "123456dads";
+        // streamClient.sendBinary(s);
     } else if(event == WebsocketsEvent::ConnectionClosed) {
         Serial.println("Stream Connnection Closed");
     } else if(event == WebsocketsEvent::GotPing) {
@@ -71,6 +71,16 @@ void onStreamEventsCallback(WebsocketsEvent event, String data) {
     } else if(event == WebsocketsEvent::GotPong) {
         Serial.println("Stream Got a Pong!");
     }
+}
+
+void task1Function1(void* p) {
+
+    camera.starStreamHandler2(streamClient);
+}
+
+void task1Function2(void* p) {
+
+    camera.sendCache(streamClient);
 }
 
 void setup() {
@@ -86,7 +96,7 @@ void setup() {
     Serial.print(".");
   }
 
-  camera.startStreamServer();
+//   camera.startStreamServer();
 
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
@@ -99,9 +109,15 @@ void setup() {
   streamClient.onMessage(onStreamMessageCallback);
   streamClient.onEvent(onStreamEventsCallback);
   streamClient.connect(ws_stream_url);
+
+  camera.startStreamServer2();
+
+//  xTaskCreateStaticPinnedToCore(task1Function1, "Task1", 1024*4, NULL, 1, NULL, NULL, 1);
+//   xTaskCreateStaticPinnedToCore(task1Function2, "Task2", 1024*4, NULL, 1, NULL, NULL, 1);
 }
 
 void loop() {
   client.poll();
   streamClient.poll();
+// camera.starStreamHandler2(streamClient);
 }

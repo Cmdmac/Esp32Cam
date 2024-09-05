@@ -10,4 +10,4 @@ typedef enum {
     DECREASE_FRAME_SIZE
 } CommandType;
 
-#endif _COMMAND_H_
+#endif

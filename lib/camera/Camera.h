@@ -7,6 +7,7 @@ class Camera {
         Camera();
         void setUp();
         void startStreamServer();
+        void startStreamServer2();
         void increaseJPGQuality();
         void decreaseJPGQuality();
         void setJPGQuality(int quality);
@@ -15,9 +16,11 @@ class Camera {
         void setFrameSize(int);
         void starStreamHandler(WebsocketsClient ws);
         void stopStreamHandler();
+        void starStreamHandler2(WebsocketsClient client);
+        void sendCache(WebsocketsClient client);
 
+        static char* allocateMemory(char* aPtr, size_t aSize);
     private:
-        char* allocateMemory(char* aPtr, size_t aSize);
         
         sensor_t *pSensor;
 
