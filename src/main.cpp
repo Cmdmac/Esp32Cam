@@ -96,7 +96,7 @@ void setup() {
     Serial.print(".");
   }
 
-//   camera.startStreamServer();
+  camera.startStreamServer();
 
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
@@ -110,7 +110,7 @@ void setup() {
   streamClient.onEvent(onStreamEventsCallback);
   streamClient.connect(ws_stream_url);
 
-  camera.startStreamServer2();
+//   camera.startStreamServer();
 
 //  xTaskCreateStaticPinnedToCore(task1Function1, "Task1", 1024*4, NULL, 1, NULL, NULL, 1);
 //   xTaskCreateStaticPinnedToCore(task1Function2, "Task2", 1024*4, NULL, 1, NULL, NULL, 1);

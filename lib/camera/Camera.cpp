@@ -378,7 +378,7 @@ void camCB(void* pvParameters) {
 
     //  Let other tasks run and wait until the end of the current frame rate interval (if any time left)
     taskYIELD();
-    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    // vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
     //  Only switch frames around if no frame is currently being streamed to a client
     //  Wait on a semaphore until client operation completes
