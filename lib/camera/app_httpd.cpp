@@ -813,8 +813,8 @@ void startCameraServer()
 
     httpd_register_uri_handler(camera_httpd, &capture_uri);
 
-    config.server_port += 1;
-    config.ctrl_port += 1;
+    config.server_port;
+    config.ctrl_port;
     ESP_LOGI(TAG, "Starting stream server on port: '%d'", config.server_port);
     if (httpd_start(&stream_httpd, &config) == ESP_OK)
     {

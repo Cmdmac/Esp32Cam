@@ -15,6 +15,10 @@ const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream?client
 
 
 Camera camera;
+
+#include <I2S.h>
+#include "Audio.h"
+
 void onControlMessageCallback(WebsocketsMessage message) {
     Serial.print("Got Message: ");
     Serial.println(message.data());
@@ -27,7 +31,7 @@ void onControlMessageCallback(WebsocketsMessage message) {
             break;
         case STOP_STREAM:
         break;
-        case INCREASE_JPG_QUALITY:
+        case INCREASE_JPG_QUALITY:                                 
             camera.increaseFrameSize();
         break;
         case DECREASE_JPG_QUALITY:
@@ -83,6 +87,7 @@ void task1Function2(void* p) {
     camera.sendCache(streamClient);
 }
 
+Audio audio;
 void setup() {
   Serial.begin(9600);
   
@@ -96,7 +101,7 @@ void setup() {
     Serial.print(".");
   }
 
-  camera.startStreamServer();
+//   camera.startStreamServer();
 
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
@@ -110,14 +115,30 @@ void setup() {
   streamClient.onEvent(onStreamEventsCallback);
   streamClient.connect(ws_stream_url);
 
-//   camera.startStreamServer();
+  camera.startStreamServer();
 
 //  xTaskCreateStaticPinnedToCore(task1Function1, "Task1", 1024*4, NULL, 1, NULL, NULL, 1);
 //   xTaskCreateStaticPinnedToCore(task1Function2, "Task2", 1024*4, NULL, 1, NULL, NULL, 1);
+
+// start I2S at 16 kHz with 16-bits per sample
+//   I2S.setAllPins(-1, 42, 41, -1, -1);
+//   if (!I2S.begin(PDM_MONO_MODE, 16000, 16)) {
+//     Serial.println("Failed to initialize I2S!");
+//     while (1); // do nothing
+//   }
+    // audio.setup(SAMPLE_RATE, SAMPLE_BITS);
+    // audio.recordWav("/xiao_audio_test.wav", RECORD_TIME * 2);
 }
 
 void loop() {
   client.poll();
   streamClient.poll();
 // camera.starStreamHandler2(streamClient);
+
+  // read a sample
+//   int sample = I2S.read();
+
+//   if (sample && sample != -1 && sample != 1) {
+//     Serial.println(sample);
+//   }
 }
