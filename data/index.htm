@@ -139,7 +139,7 @@
                         span.textContent = '/';
                         span.style.cursor = 'pointer';
                         span.addEventListener('click', function () {
-                            currentPathArray = currentPathArray.slice(0, i + 1);
+                            currentPathArray = currentPathArray.slice(0, 1);
                             displayDirectory();
                         });
                         currentPathSpan.appendChild(span);
@@ -190,7 +190,7 @@
             displayDirectory();
 
             function getDirectoryContents(path, callback) {
-                fetch('http://localhost/list?dir=' + path)
+                fetch(window.location.href + 'list?dir=' + path)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');

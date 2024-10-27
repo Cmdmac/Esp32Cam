@@ -269,7 +269,7 @@ void SDWebServer::setup(void) {
   if (MDNS.begin(host)) {
     MDNS.addService("http", "tcp", SDWEBSERVER_PORT);
     Serial.println("MDNS responder started");
-    Serial.print("You can now connect to http://");
+    Serial.print("You can now connect to sdwebserver http://");
     Serial.print(host);
     Serial.println(".local");
   }
@@ -282,7 +282,7 @@ void SDWebServer::setup(void) {
   server.onNotFound([&]() { handleNotFound(); });
 
   server.begin(SDWEBSERVER_PORT);
-  Serial.println("HTTP server started");
+  Serial.println("SD WebServer server started");
 
     if (SD.begin(21)) {
         Serial.println("SD Card initialized.");
