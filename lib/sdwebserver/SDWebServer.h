@@ -13,6 +13,7 @@ private:
     WebServer server;
     bool hasSD = false;
     File uploadFile;
+    std::string spiffsIndexFileStr;
 
     void returnOK();
     void returnFail(String msg);
@@ -22,6 +23,7 @@ private:
     void handleDelete();
     void handleCreate();
     void printDirectory();
+    void handleIndex();
     void handleNotFound();
 
 public:

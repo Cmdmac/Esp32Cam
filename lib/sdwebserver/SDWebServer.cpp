@@ -33,8 +33,8 @@
 */
 #include <WiFi.h>
 // #include <NetworkClient.h>
-
-
+#include <SPIFFS.h>
+#include "esp_spiffs.h"
 
 // const char *ssid = "**********";
 // const char *password = "**********";
@@ -236,6 +236,15 @@ void SDWebServer::printDirectory() {
   dir.close();
 }
 
+void SDWebServer::handleIndex() {
+    // Serial.println(spiffsIndexFileStr.c_str());
+    String content = String(spiffsIndexFileStr.c_str());
+    // Serial.println(spiffsIndexFileStr.c_str());
+    server.send(200, "text/html; charset=utf-8", content);
+    
+    server.sendContent(content);
+}
+
 void SDWebServer::handleNotFound() {
   if (hasSD && loadFromSdCard(server.uri())) {
     return;
@@ -265,6 +274,7 @@ void SDWebServer::setup(void) {
     Serial.println(".local");
   }
   
+  server.on("/", HTTP_GET, [&]() { handleIndex(); });
   server.on("/list", HTTP_GET,[&]() { printDirectory(); });
   server.on("/edit", HTTP_DELETE, [&]() { handleDelete(); });
   server.on("/edit", HTTP_PUT, [&]() { handleCreate(); });
@@ -274,10 +284,35 @@ void SDWebServer::setup(void) {
   server.begin(SDWEBSERVER_PORT);
   Serial.println("HTTP server started");
 
-  if (SD.begin(21)) {
-    Serial.println("SD Card initialized.");
-    hasSD = true;
-  }
+    if (SD.begin(21)) {
+        Serial.println("SD Card initialized.");
+        hasSD = true;
+    }
+
+    if (!SPIFFS.begin(true)) {
+        Serial.println("SPIFFS 初始化失败");
+        return;
+    }
+
+    // size_t total = 0, used = 0;
+    // esp_spiffs_info("", &total, &used);
+    // printf("Flash chip size: %d\n", total);
+    // printf("Used size: %d\n", used);
+
+    File file = SPIFFS.open("/index.htm", "r");
+    if (!file) {
+        Serial.println("open spiffs file index.html failure");
+        return;
+    }
+
+    uint8_t buffer[128] = {0};
+    while(file.available()) {
+        int count = file.read(buffer, 128);
+        std::string s = std::string((char*)buffer, count);
+        this->spiffsIndexFileStr.append(s);
+        memset(buffer, 0, 128);
+    }
+
 }
 
 void SDWebServer::loop(void) {

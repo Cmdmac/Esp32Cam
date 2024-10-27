@@ -119,6 +119,8 @@ void setup() {
   camera.startStreamServer();
   sdWebServer.setup();
 
+
+
 //  xTaskCreateStaticPinnedToCore(task1Function1, "Task1", 1024*4, NULL, 1, NULL, NULL, 1);
 //   xTaskCreateStaticPinnedToCore(task1Function2, "Task2", 1024*4, NULL, 1, NULL, NULL, 1);
 

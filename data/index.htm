@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SDCard FileManager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            margin: 0;
+        }
+
+        #current-path {
+            font-size: 14px;
+        }
+
+        #file-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #file-list li {
+            padding: 5px 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #file-list li:hover {
+            background-color: #ccc;
+        }
+
+        button {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 3px 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        #path-actions {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+
+        }
+        #current-path {
+            font-size: 28px;
+            flex-grow: 1;
+        }
+
+        #upload-button {
+            margin-right: 10px;
+        }
+
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>SDCardFileManager</h1>
+       
+    </header>
+     <div id="path-actions">
+            <div id="current-path"></div>
+            <button id="upload-button">上传</button>
+        </div>
+    <ul id="file-list"></ul>
+
+    <script>
+        const fileSystem = {
+            "/": {
+                type: "directory",
+                contents: []
+            }
+        };
+
+        let currentPathArray = [];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const fileListDiv = document.getElementById('file-list');
+            const currentPathSpan = document.getElementById('current-path');
+            const uploadButton = document.getElementById('upload-button');
+
+            function showFileList(currentPath, fileList) {
+                fileList.forEach((item) => {
+                    const li = document.createElement('li');
+                    li.textContent = item.name;
+                    li.dataset.path = `${currentPath}/${item.name}`;
+                    li.dataset.type = item.type;
+                    li.addEventListener('click', function () {
+                        const targetPath = this.dataset.path;
+                        const type = this.dataset.type;
+                        if (type === 'directory') {
+                            currentPathArray.push(item.name);
+                            displayDirectory();
+                        } else {
+                            console.log(`点击了文件: ${targetPath}`);
+                        }
+                    });
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = '删除';
+                    deleteButton.addEventListener('click', function () {
+                        li.remove();
+                        console.log(`已模拟删除: ${item.name}`);
+                    });
+                    li.appendChild(deleteButton);
+
+                    fileListDiv.appendChild(li);
+                });
+            }
+
+            function displayDirectory() {
+                currentPathSpan.innerHTML = '';
+                if (currentPathArray.length == 1) {
+                        const span = document.createElement('span');
+                        span.textContent = '/';
+                        span.style.cursor = 'pointer';
+                        span.addEventListener('click', function () {
+                            currentPathArray = currentPathArray.slice(0, i + 1);
+                            displayDirectory();
+                        });
+                        currentPathSpan.appendChild(span);
+                } else {
+                    for (let i = 0; i < currentPathArray.length; i++) {
+                        const pathSegment = currentPathArray[i];
+                        const span = document.createElement('span');
+                        span.textContent = pathSegment;
+                        span.style.cursor = 'pointer';
+                        span.addEventListener('click', function () {
+                            currentPathArray = currentPathArray.slice(0, i + 1);
+                            displayDirectory();
+                        });
+                        currentPathSpan.appendChild(span);
+                        
+                        if (i > 0 && i < currentPathArray.length - 1) {
+                            const spanSegment = document.createElement('span');
+                            spanSegment.textContent = '/';
+                            // spanSegment.style.cursor = 'pointer';
+                            currentPathSpan.appendChild(spanSegment);                            
+                        }
+
+                    }
+                }
+                
+                // currentPathSpan.innerHTML = currentPathDisplay;
+
+                fileListDiv.innerHTML = '';
+                let currentPath = currentPathArray.join('/');
+                if (currentPath.startsWith("//")) {
+                    currentPath = currentPath.substring(1, currentPath.length);
+                }
+                const directory = fileSystem[currentPath];
+                if (directory && directory.contents.length > 0) {
+                    showFileList(currentPath, directory.contents);
+                } else {
+                    getDirectoryContents(currentPath, function(data) {
+                        if (fileSystem[currentPath] == undefined) {
+                            fileSystem[currentPath] = {};
+                        }
+                        fileSystem[currentPath].contents = data;
+                        showFileList(currentPath, data);
+                    });                    
+                }
+            }
+
+            currentPathArray.push('/');
+            displayDirectory();
+
+            function getDirectoryContents(path, callback) {
+                fetch('http://localhost/list?dir=' + path)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => callback(data))
+                .catch(error => console.error('There was a problem with the fetch operation:', error));
+            }
+
+            uploadButton.addEventListener('click', function () {
+                console.log('点击了上传按钮，这里可添加上传文件的逻辑，实际需结合后端实现');
+            });
+        });
+    </script>
+</body>
+
+</html>
