@@ -4,6 +4,10 @@
 #include <ArduinoWebsockets.h>
 #include <ArduinoJson.h>
 #include "command.h"
+
+#include <I2S.h>
+#include "Audio.h"
+#include "SDWebServer.h"
 using namespace websockets;
 
 WebsocketsClient client;
@@ -13,11 +17,9 @@ const char* password = "fengzhiping,1101";  // 替换为您的 Wi-Fi 密码
 const char* ws_control_url = "ws://192.168.2.153:3000/mobile/camera/control?client=esp32cam"; //Enter server adress
 const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream?client=esp32cam"; //Enter server adress
 
-
+Audio audio;
 Camera camera;
-
-#include <I2S.h>
-#include "Audio.h"
+SDWebServer sdWebServer;
 
 void onControlMessageCallback(WebsocketsMessage message) {
     Serial.print("Got Message: ");
@@ -87,7 +89,6 @@ void task1Function2(void* p) {
     camera.sendCache(streamClient);
 }
 
-Audio audio;
 void setup() {
   Serial.begin(9600);
   
@@ -116,6 +117,7 @@ void setup() {
   streamClient.connect(ws_stream_url);
 
   camera.startStreamServer();
+  sdWebServer.setup();
 
 //  xTaskCreateStaticPinnedToCore(task1Function1, "Task1", 1024*4, NULL, 1, NULL, NULL, 1);
 //   xTaskCreateStaticPinnedToCore(task1Function2, "Task2", 1024*4, NULL, 1, NULL, NULL, 1);
@@ -133,6 +135,7 @@ void setup() {
 void loop() {
   client.poll();
   streamClient.poll();
+  sdWebServer.loop();
 // camera.starStreamHandler2(streamClient);
 
   // read a sample
