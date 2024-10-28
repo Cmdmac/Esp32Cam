@@ -135,7 +135,7 @@
                 fetch(window.location.href + "createFolder", {
                     method: 'POST', headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
-                    }, body: "dir=" + currentPath + userInput
+                    }, body: "dir=" + currentPath + '/' + userInput
                 })
                 .then(response => response.json())
                 .then(data => {
