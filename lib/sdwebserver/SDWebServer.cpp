@@ -35,8 +35,6 @@
 // #include <NetworkClient.h>
 #include <SPIFFS.h>
 #include "esp_spiffs.h"
-#include <UrlEncode.h>
-
 
 // const char *ssid = "**********";
 // const char *password = "**********";
