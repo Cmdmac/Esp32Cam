@@ -25,6 +25,7 @@ private:
     void printDirectory();
     void handleIndex();
     void handleNotFound();
+    void handleCreateFolder();
 
 public:
     // SDWebServer(/* args */);

@@ -68,9 +68,14 @@
         #current-path {
             font-size: 28px;
             flex-grow: 1;
+            margin-left: 10px;
         }
 
         #upload-button {
+            margin-right: 10px;
+        }
+
+        #create-folder {
             margin-right: 10px;
         }
 
@@ -85,6 +90,7 @@
      <div id="path-actions">
             <div id="current-path"></div>
             <button id="upload-button">上传</button>
+            <button id="create-folder" >创建目录</button>
         </div>
     <ul id="file-list"></ul>
 
@@ -102,12 +108,28 @@
             const fileListDiv = document.getElementById('file-list');
             const currentPathSpan = document.getElementById('current-path');
             const uploadButton = document.getElementById('upload-button');
+            const createFolderButton = document.getElementById('create-folder');
+
+            createFolderButton.addEventListener('click', function(e) {
+                var userInput = prompt("请输目录名字", "newFolder");
+                console.log(userInput);
+                let currentPath = currentPathArray.join('/');
+                if (currentPath.startsWith("//")) {
+                    currentPath = currentPath.substring(1, currentPath.length);
+                }
+                fetch(window.location.href + "createFolder", {
+                    method: 'POST', body: "dir=" + currentPath + userInput
+                })
+                .then(response => response.json())
+                .then(data => displayDirectory())
+                .catch(error => alert(error));
+            });
 
             function showFileList(currentPath, fileList) {
                 fileList.forEach((item) => {
                     const li = document.createElement('li');
                     li.textContent = item.name;
-                    li.dataset.path = `${currentPath}/${item.name}`;
+                    li.dataset.path = `${item.name}`;
                     li.dataset.type = item.type;
                     li.addEventListener('click', function () {
                         const targetPath = this.dataset.path;
@@ -122,9 +144,10 @@
 
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = '删除';
-                    deleteButton.addEventListener('click', function () {
+                    deleteButton.addEventListener('click', function (event) {
+                        event.stopPropagation();
                         li.remove();
-                        console.log(`已模拟删除: ${item.name}`);
+                        console.log(`delete: ${item.name}`);
                     });
                     li.appendChild(deleteButton);
 
@@ -132,12 +155,13 @@
                 });
             }
 
-            function displayDirectory() {
+            function updateNavigator() {
                 currentPathSpan.innerHTML = '';
                 if (currentPathArray.length == 1) {
                         const span = document.createElement('span');
                         span.textContent = '/';
                         span.style.cursor = 'pointer';
+                        span.style.color = 'blue'
                         span.addEventListener('click', function () {
                             currentPathArray = currentPathArray.slice(0, 1);
                             displayDirectory();
@@ -149,6 +173,7 @@
                         const span = document.createElement('span');
                         span.textContent = pathSegment;
                         span.style.cursor = 'pointer';
+                        span.style.color = 'blue'
                         span.addEventListener('click', function () {
                             currentPathArray = currentPathArray.slice(0, i + 1);
                             displayDirectory();
@@ -164,7 +189,11 @@
 
                     }
                 }
+            }
+
+            function displayDirectory() {
                 
+                updateNavigator();
                 // currentPathSpan.innerHTML = currentPathDisplay;
 
                 fileListDiv.innerHTML = '';

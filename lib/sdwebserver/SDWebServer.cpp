@@ -226,7 +226,7 @@ void SDWebServer::printDirectory() {
     output += "{\"type\":\"";
     output += (entry.isDirectory()) ? "dir" : "file";
     output += "\",\"name\":\"";
-    output += entry.path();
+    output += entry.name();
     output += "\"";
     output += "}";
     server.sendContent(output);
@@ -264,6 +264,18 @@ void SDWebServer::handleNotFound() {
   Serial.print(message);
 }
 
+void SDWebServer::handleCreateFolder() {
+  if (!server.hasArg("dir")) {
+    return returnFail("BAD ARGS");
+  }
+  String path = server.arg("dir");
+  if (SD.mkdir(path)) {
+    server.send(200, "text/json", "{\"code\":1}");
+  } else {
+    server.send(500, "text/json", "{\"code\":0}");
+  }
+}
+
 void SDWebServer::setup(void) {
 
   if (MDNS.begin(host)) {
@@ -279,6 +291,7 @@ void SDWebServer::setup(void) {
   server.on("/edit", HTTP_DELETE, [&]() { handleDelete(); });
   server.on("/edit", HTTP_PUT, [&]() { handleCreate(); });
   server.on("/edit", HTTP_POST, [&]() { returnOK(); }, [&]() { handleFileUpload(); });
+  server.on("/createFolder", HTTP_POST, [&]() { handleCreateFolder(); });
   server.onNotFound([&]() { handleNotFound(); });
 
   server.begin(SDWEBSERVER_PORT);
