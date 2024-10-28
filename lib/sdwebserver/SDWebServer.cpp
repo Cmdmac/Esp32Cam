@@ -35,6 +35,8 @@
 // #include <NetworkClient.h>
 #include <SPIFFS.h>
 #include "esp_spiffs.h"
+#include <UrlEncode.h>
+
 
 // const char *ssid = "**********";
 // const char *password = "**********";
@@ -103,15 +105,17 @@ bool SDWebServer::loadFromSdCard(String path) {
 }
 
 void SDWebServer::handleFileUpload() {
-  if (server.uri() != "/edit") {
-    return;
-  }
+
+  String dir = server.arg(0);
   HTTPUpload &upload = server.upload();
+  
+  String path = dir + upload.filename;
+  // Serial.println(path);
   if (upload.status == UPLOAD_FILE_START) {
-    if (SD.exists((char *)upload.filename.c_str())) {
-      SD.remove((char *)upload.filename.c_str());
+    if (SD.exists(path)) {
+      SD.remove(path);
     }
-    uploadFile = SD.open(upload.filename.c_str(), FILE_WRITE);
+    uploadFile = SD.open(path, FILE_WRITE);
     Serial.print("Upload: START, filename: ");
     Serial.println(upload.filename);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -127,6 +131,7 @@ void SDWebServer::handleFileUpload() {
     Serial.print("Upload: END, Size: ");
     Serial.println(upload.totalSize);
   }
+  // returnOK();
 }
 
 void SDWebServer::deleteRecursive(String path) {
@@ -159,10 +164,10 @@ void SDWebServer::deleteRecursive(String path) {
 }
 
 void SDWebServer::handleDelete() {
-  if (server.args() == 0) {
+  if (!server.hasArg("path")) {
     return returnFail("BAD ARGS");
   }
-  String path = server.arg(0);
+  String path = server.arg("path");
   if (path == "/" || !SD.exists((char *)path.c_str())) {
     returnFail("BAD PATH");
     return;
@@ -175,7 +180,7 @@ void SDWebServer::handleCreate() {
   if (server.args() == 0) {
     return returnFail("BAD ARGS");
   }
-  String path = server.arg(0);
+  String path = server.arg("path");
   if (path == "/" || SD.exists((char *)path.c_str())) {
     returnFail("BAD PATH");
     return;
@@ -269,6 +274,10 @@ void SDWebServer::handleCreateFolder() {
     return returnFail("BAD ARGS");
   }
   String path = server.arg("dir");
+  if (SD.exists(path)) {
+    server.send(500, "text/json", "{\"code\":0, \"msg\":\"folder exist!\"}");
+    return;
+  }
   if (SD.mkdir(path)) {
     server.send(200, "text/json", "{\"code\":1}");
   } else {
@@ -288,9 +297,9 @@ void SDWebServer::setup(void) {
   
   server.on("/", HTTP_GET, [&]() { handleIndex(); });
   server.on("/list", HTTP_GET,[&]() { printDirectory(); });
-  server.on("/edit", HTTP_DELETE, [&]() { handleDelete(); });
+  server.on("/delete", HTTP_POST, [&]() { handleDelete(); });
   server.on("/edit", HTTP_PUT, [&]() { handleCreate(); });
-  server.on("/edit", HTTP_POST, [&]() { returnOK(); }, [&]() { handleFileUpload(); });
+  server.on("/upload", HTTP_POST, [&]() { returnOK(); }, [&]() { handleFileUpload(); });
   server.on("/createFolder", HTTP_POST, [&]() { handleCreateFolder(); });
   server.onNotFound([&]() { handleNotFound(); });
 

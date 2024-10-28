@@ -90,9 +90,15 @@
      <div id="path-actions">
             <div id="current-path"></div>
             <button id="upload-button">上传</button>
+            <input type="file" id="real-upload-button" style="display: none;"/>
             <button id="create-folder" >创建目录</button>
         </div>
     <ul id="file-list"></ul>
+    
+    <div id="progressBarContainer">
+        <progress id="progressBar" value="0" max="100"></progress>
+        <span id="progressText">0%</span>
+    </div>
 
     <script>
         const fileSystem = {
@@ -101,6 +107,15 @@
                 contents: []
             }
         };
+
+        
+        function getCurrentPath() {
+            let currentPath = currentPathArray.join('/');
+            if (currentPath.startsWith("//")) {
+                currentPath = currentPath.substring(1, currentPath.length);
+            }
+            return currentPath;
+        }
 
         let currentPathArray = [];
 
@@ -118,14 +133,87 @@
                     currentPath = currentPath.substring(1, currentPath.length);
                 }
                 fetch(window.location.href + "createFolder", {
-                    method: 'POST', body: "dir=" + currentPath + userInput
+                    method: 'POST', headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                    }, body: "dir=" + currentPath + userInput
                 })
                 .then(response => response.json())
-                .then(data => displayDirectory())
+                .then(data => {
+                    if (data.code == 1) {
+                        // update ui
+                        updateUi(currentPath);      
+                    } else {
+                        alert('error code=' + data.code + ",msg=" + data.msg);
+                    }                    
+                })
                 .catch(error => alert(error));
             });
 
+            function uploadFile() {
+                const fileInput = document.getElementById('real-upload-button');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    alert('请选择要上传的文件');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+                // formData.append("dir", getCurrentPath());
+                let p = getCurrentPath() + "/";
+                if (p === '//') {
+                    p = '/';
+                }
+                const url = window.location.href + "upload?dir=" + p;
+                const options = {
+                    method: 'POST',
+                    body: formData
+                };
+
+                var reader = file.stream().getReader();
+                var total = file.size;
+                var loaded = 0;
+
+                var updateProgress = function () {
+                    var percentComplete = Math.floor((loaded / total) * 100);
+                    document.getElementById('progressBar').value = percentComplete;
+                    document.getElementById('progressText').innerHTML = percentComplete + '%';
+                };
+
+                var readChunk = function () {
+                    return reader.read({ value: new ArrayBuffer(1024 * 1024) }).then(function ({ done, value }) {
+                        if (done) {
+                            return;
+                        }
+                        loaded += value.byteLength;
+                        updateProgress();
+                        return readChunk();
+                    });
+                };
+
+                fetch(url, options)
+                .then(data => {
+                    updateUi(getCurrentPath());
+                }).catch(error => console.error(error)); 
+
+                // 开始读取文件并更新进度
+                readChunk();
+            }
+
+            function updateUi(currentPath) {
+                getDirectoryContents(currentPath, function(data) {
+                    if (fileSystem[currentPath] == undefined) {
+                        fileSystem[currentPath] = {};
+                    }
+                    fileSystem[currentPath].contents = data;
+                    updateNavigator();
+                    showFileList(currentPath, data);
+                });  
+            }
+
             function showFileList(currentPath, fileList) {
+                fileListDiv.innerHTML = '';
                 fileList.forEach((item) => {
                     const li = document.createElement('li');
                     li.textContent = item.name;
@@ -134,9 +222,9 @@
                     li.addEventListener('click', function () {
                         const targetPath = this.dataset.path;
                         const type = this.dataset.type;
-                        if (type === 'directory') {
+                        if (type === 'dir') {
                             currentPathArray.push(item.name);
-                            displayDirectory();
+                            updateUi(getCurrentPath());
                         } else {
                             console.log(`点击了文件: ${targetPath}`);
                         }
@@ -148,6 +236,23 @@
                         event.stopPropagation();
                         li.remove();
                         console.log(`delete: ${item.name}`);
+                        var confirmDelete = confirm("你确定要删除这个文件或目录吗？");
+                        if (confirmDelete) {
+                            // 如果用户点击了“确定”按钮，执行删除操作
+                            fetch(window.location.href + "delete", {
+                                method: 'POST', headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded'
+                                }, body: "path=" + getCurrentPath() + item.name
+                            })
+                            .then(data => {
+                                updateUi(getCurrentPath());
+                            })
+                            .catch(error => console.error(error))
+                        } else {
+                            // 如果用户点击了“取消”按钮，取消删除操作
+                            console.log("删除操作已取消");
+                        }
+                        
                     });
                     li.appendChild(deleteButton);
 
@@ -196,22 +301,12 @@
                 updateNavigator();
                 // currentPathSpan.innerHTML = currentPathDisplay;
 
-                fileListDiv.innerHTML = '';
-                let currentPath = currentPathArray.join('/');
-                if (currentPath.startsWith("//")) {
-                    currentPath = currentPath.substring(1, currentPath.length);
-                }
+                let currentPath = getCurrentPath();
                 const directory = fileSystem[currentPath];
                 if (directory && directory.contents.length > 0) {
                     showFileList(currentPath, directory.contents);
                 } else {
-                    getDirectoryContents(currentPath, function(data) {
-                        if (fileSystem[currentPath] == undefined) {
-                            fileSystem[currentPath] = {};
-                        }
-                        fileSystem[currentPath].contents = data;
-                        showFileList(currentPath, data);
-                    });                    
+                    updateUi(currentPath);                 
                 }
             }
 
@@ -231,7 +326,11 @@
             }
 
             uploadButton.addEventListener('click', function () {
-                console.log('点击了上传按钮，这里可添加上传文件的逻辑，实际需结合后端实现');
+                // uploadFile();
+                document.getElementById('real-upload-button').onchange = function () {
+                    uploadFile();
+                };
+                document.getElementById('real-upload-button').click();
             });
         });
     </script>
