@@ -208,7 +208,7 @@
 
             fetch(url, options)
             .then(data => {
-                document.getElementById("progressBar").style = 'display: block';
+                document.getElementById("progressBar").style = 'display: none';
                 updateUi(getCurrentPath());
             })
             .catch(error => { 
