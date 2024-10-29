@@ -264,7 +264,7 @@
                         fetch(window.location.href + "delete", {
                             method: 'POST', headers: {
                             'Content-Type': 'application/x-www-form-urlencoded'
-                            }, body: "path=" + getCurrentPath() + item.name
+                            }, body: "path=" + getCurrentPath() + '/' + item.name
                         })
                         .then(data => {
                             updateUi(getCurrentPath());
