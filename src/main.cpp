@@ -1,17 +1,12 @@
 #include <Arduino.h>
 #include "Camera.h"
 #include <WiFi.h>
-#include <ArduinoWebsockets.h>
-#include <ArduinoJson.h>
 #include "command.h"
-
 #include <I2S.h>
 #include "Audio.h"
 #include "SDWebServer.h"
-using namespace websockets;
+#include "Ws.h"
 
-WebsocketsClient client;
-WebsocketsClient streamClient;
 const char* ssid     = "Stark";  // 替换为您的 Wi-Fi 网络名称
 const char* password = "fengzhiping,1101";  // 替换为您的 Wi-Fi 密码
 const char* ws_control_url = "ws://192.168.2.153:3000/mobile/camera/control?client=esp32cam"; //Enter server adress
@@ -21,15 +16,12 @@ Audio audio;
 Camera camera;
 SDWebServer sdWebServer;
 
-void onControlMessageCallback(WebsocketsMessage message) {
-    Serial.print("Got Message: ");
-    Serial.println(message.data());
-    JsonDocument doc;
-    deserializeJson(doc, message.data());
-    int cmd = doc["command"];
-    switch(cmd) {
+Ws ws;
+
+void onCommand(int cmd) {
+  switch(cmd) {
         case START_STREAM:
-            camera.starStreamHandler(streamClient);
+            camera.starStreamHandler(ws.getStreamWs());
             break;
         case STOP_STREAM:
         break;
@@ -46,47 +38,6 @@ void onControlMessageCallback(WebsocketsMessage message) {
         default:
         break;
     }
-}
-
-void onControlEventsCallback(WebsocketsEvent event, String data) {
-    if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Control Connnection Opened");
-    } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Control Connnection Closed");
-    } else if(event == WebsocketsEvent::GotPing) {
-        Serial.println("Control Got a Ping!");
-    } else if(event == WebsocketsEvent::GotPong) {
-        Serial.println("Control Got a Pong!");
-    }
-}
-
-void onStreamMessageCallback(WebsocketsMessage message) {
-    Serial.print("Got Message: ");
-    Serial.println(message.data());
-}
-
-void onStreamEventsCallback(WebsocketsEvent event, String data) {
-    if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Stream Connnection Opened");
-        // WSInterfaceString s = "123456dads";
-        // streamClient.sendBinary(s);
-    } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Stream Connnection Closed");
-    } else if(event == WebsocketsEvent::GotPing) {
-        Serial.println("Stream Got a Ping!");
-    } else if(event == WebsocketsEvent::GotPong) {
-        Serial.println("Stream Got a Pong!");
-    }
-}
-
-void task1Function1(void* p) {
-
-    camera.starStreamHandler2(streamClient);
-}
-
-void task1Function2(void* p) {
-
-    camera.sendCache(streamClient);
 }
 
 void setup() {
@@ -108,14 +59,7 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
 
-  client.onMessage(onControlMessageCallback);
-  client.onEvent(onControlEventsCallback);
-  client.connect(ws_control_url);
-
-  streamClient.onMessage(onStreamMessageCallback);
-  streamClient.onEvent(onStreamEventsCallback);
-  streamClient.connect(ws_stream_url);
-
+  ws.setUp(ws_control_url, ws_stream_url, onCommand);
   camera.startStreamServer();
   sdWebServer.setup();
 
@@ -135,8 +79,7 @@ void setup() {
 }
 
 void loop() {
-  client.poll();
-  streamClient.poll();
+  ws.loop();
   sdWebServer.loop();
 // camera.starStreamHandler2(streamClient);
 
