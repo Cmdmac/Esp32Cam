@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SDCard FileManager</title>
+    <title>FileManager</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -47,6 +47,10 @@
             background-color: #ccc;
         }
 
+        #file-list li span {
+            flex-grow: 1;
+        }
+
         button {
             background-color: #333;
             color: white;
@@ -63,7 +67,7 @@
             width: 100%;
             display: flex;
             flex-direction: row;
-
+            align-items: center;
         }
         #current-path {
             font-size: 28px;
@@ -77,6 +81,7 @@
         }
 
         #upload-button {
+            margin-left: 10px;
             margin-right: 10px;
         }
 
@@ -93,11 +98,12 @@
 
 <body>
     <header>
-        <h1>SDCardFileManager</h1>
+        <h1>FileManager</h1>
        
     </header>
      <div id="path-actions">
             <div id="current-path"></div>
+            <span>总大小：{{%total%}}，已使用：{{%used%}}</span>
             <button id="upload-button">上传</button>
             <input type="file" id="real-upload-button" style="display: none;"/>
             <button id="create-folder" >创建目录</button>
@@ -235,7 +241,7 @@
             fileListDiv.innerHTML = '';
             fileList.forEach((item) => {
                 const li = document.createElement('li');
-                li.textContent = item.name;
+                // li.textContent = item.name;
                 li.dataset.path = `${item.name}`;
                 li.dataset.type = item.type;
                 if (item.type == 'dir') {
@@ -252,8 +258,13 @@
                     }
                 });
 
+                const span = document.createElement('span');
+                span.innerHTML = item.name;
+                li.appendChild(span);
+
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = '删除';
+                deleteButton.style.marginRight = "10px";
                 deleteButton.addEventListener('click', function (event) {
                     event.stopPropagation();
                     li.remove();
@@ -264,7 +275,7 @@
                         fetch(window.location.href + "delete", {
                             method: 'POST', headers: {
                             'Content-Type': 'application/x-www-form-urlencoded'
-                            }, body: "path=" + getCurrentPath() + '/' + item.name
+                            }, body: "path=" + getCurrentPath() + item.name
                         })
                         .then(data => {
                             updateUi(getCurrentPath());
@@ -277,6 +288,18 @@
                     
                 });
                 li.appendChild(deleteButton);
+
+                const downloadButton = document.createElement('button');
+                downloadButton.textContent = '下载';
+                downloadButton.addEventListener('click', function(event) {
+                    // fetch(window.location.href + "download?path=" + getCurrentPath() + item.name)
+                    // .then(data => {
+                    //     updateUi(getCurrentPath());
+                    // })
+                    // .catch(error => console.error(error))
+                    window.location.href = window.location.href + "download?path=" + getCurrentPath() + item.name;
+                });
+                li.appendChild(downloadButton);
 
                 fileListDiv.appendChild(li);
             });

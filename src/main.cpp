@@ -4,7 +4,7 @@
 #include "command.h"
 #include <I2S.h>
 #include "Audio.h"
-#include "SDWebServer.h"
+#include "FileWebServer.h"
 #include "Ws.h"
 
 const char* ssid     = "Stark";  // 替换为您的 Wi-Fi 网络名称
@@ -14,7 +14,7 @@ const char* ws_stream_url = "ws://192.168.2.153:3000/mobile/camera/stream?client
 
 Audio audio;
 Camera camera;
-SDWebServer sdWebServer;
+FileWebServer sdWebServer;
 
 Ws ws;
 
@@ -80,7 +80,7 @@ void setup() {
 
 void loop() {
   ws.loop();
-  sdWebServer.loop();
+  // sdWebServer.loop();
 // camera.starStreamHandler2(streamClient);
 
   // read a sample
